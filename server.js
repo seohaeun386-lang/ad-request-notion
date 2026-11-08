@@ -5,10 +5,10 @@ const app=express();
 app.use(express.static('public'));
 app.use(express.json());
 const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:20*1024*1024,files:20}});
-const token=process.env.NOTION_TOKEN,db=process.env.NOTION_DATABASE_ID?.replace(/-/g,''),password=process.env.TEAM_PASSWORD;
+const token=process.env.NOTION_TOKEN,db=process.env.NOTION_DATABASE_ID?.replace(/-/g,'');
 const hdr=()=>({'Authorization':'Bearer '+token,'Notion-Version':'2022-06-28','Content-Type':'application/json'});
 async function notion(path,method='GET',body){const r=await fetch('https://api.notion.com/v1'+path,{method,headers:hdr(),body:body?JSON.stringify(body):undefined});const d=await r.json();if(!r.ok)throw Error(d.message||'Notion API 오류');return d}
-function guard(req,res,next){if(!token||!db||!password)return res.status(503).json({error:'Notion 연결 환경변수가 설정되지 않았습니다.'});if(req.get('x-team-password')!==password)return res.status(401).json({error:'팀 비밀번호가 올바르지 않습니다.'});next()}
+function guard(req,res,next){if(!token||!db)return res.status(503).json({error:'Notion 연동이 완료되지 않았습니다. 관리자에게 문의해 주세요.'});next()}
 const rich=s=>[{type:'text',text:{content:String(s??'').slice(0,1900)}}];
 const para=(name,val)=>({object:'block',type:'paragraph',paragraph:{rich_text:rich(name+': '+(typeof val==='string'?val:JSON.stringify(val)))}});
 app.post('/api/submit',guard,upload.array('files',20),async(req,res)=>{try{
@@ -28,5 +28,4 @@ app.post('/api/submit',guard,upload.array('files',20),async(req,res)=>{try{
  }
  res.json({ok:true,created});
  }catch(e){res.status(400).json({error:e.message})}});
-app.get('/api/requests',guard,async(req,res)=>{try{const d=await notion('/databases/'+db+'/query','POST',{page_size:100,sorts:[{timestamp:'created_time',direction:'descending'}]});res.json({rows:d.results.map(p=>({id:p.id,url:p.url,created:p.created_time,title:Object.values(p.properties).find(v=>v.type==='title')?.title?.map(v=>v.plain_text).join('')||'',status:Object.values(p.properties).find(v=>v.type==='status')?.status?.name||''}))})}catch(e){res.status(400).json({error:e.message})}});
 app.listen(process.env.PORT||3000,()=>console.log('Ad request server ready'));
